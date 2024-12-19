@@ -3,7 +3,9 @@ package controller
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/stackitcloud/registry-snyk-scan/types"
 	batchv1 "k8s.io/api/batch/v1"
@@ -17,42 +19,48 @@ import (
 
 const (
 	snykTokenSecretName = "snyk-token"
-	snykTokenVolume     = "snyk-token"
+	snykOrgVolume       = "snyk-token"
 )
 
 type Reconciler struct {
+	Namespace string
+
 	client client.Client
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (reconcile.Result, error) {
-	log := logf.FromContext(ctx).WithValues("registry", req.Registry, "repository", req.Repository, "digest", req.Digest, "tag", req.Tag, "platform/os", req.Platform.OS, "platform/arch", req.Platform.Architecture)
-	log.Info("Creating job for webhook event")
+	log := logf.FromContext(ctx).WithValues("registry", req.Registry, "repository", req.Repository, "digest", req.Digest, "tag", req.Tag)
 
 	labels := labelsForScanJob(req)
 
 	var jobList batchv1.JobList
-	err := r.client.List(ctx, &jobList, client.MatchingLabels(labels))
+	err := r.client.List(ctx, &jobList, client.InNamespace(r.Namespace), client.MatchingLabels(labels))
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to list existing jobs for scan: %w", err)
 	}
 	// job for this registry event was previously created, omit
 	if len(jobList.Items) > 0 {
+		log.Info("Job already present, skipping")
 		return reconcile.Result{}, nil
 	}
 
+	log.Info("Creating job for webhook event")
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   scanJobName(req),
-			Labels: labels,
+			Name:      scanJobName(req),
+			Namespace: r.Namespace,
+			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
 			Template: v1.PodTemplateSpec{
 				Spec: v1.PodSpec{
+					RestartPolicy: v1.RestartPolicyOnFailure,
 					Containers: []v1.Container{
 						{
 							Name:    "scan",
 							Image:   "snyk/snyk:linux",
-							Command: scanJobCommand(req),
+							Command: []string{"snyk"},
+							Args:    scanJobArguments(req),
 							Env: []v1.EnvVar{
 								{
 									Name: "SNYK_TOKEN",
@@ -91,31 +99,31 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 	return reconcile.Result{}, nil
 }
 
-func scanJobCommand(e types.RegistryEvent) []string {
+func scanJobArguments(e types.RegistryEvent) []string {
 	cmd := []string{
-		"snyk",
 		"container",
 		"monitor",
-		"--org=${SNYK_ORG}",
+		"-d",
+		"--org=$(SNYK_ORG)",
 	}
-	cmd = append(cmd, "--platform", fmt.Sprintf("%s/%s", e.Platform.OS, e.Platform.Architecture))
-	cmd = append(cmd, "--target-reference", fmt.Sprintf("%s@%s", e.Tag, e.Digest))
+	cmd = append(cmd, fmt.Sprintf("--target-reference=%s@%s", e.Tag, e.Digest))
 	cmd = append(cmd, e.Reference())
 	return cmd
 }
 
 func scanJobName(e types.RegistryEvent) string {
 	hash := sha256.New()
-	s := fmt.Sprintf("%s/%s:%s@%s-%s/%s", e.Registry, e.Repository, e.Tag, e.Digest, e.Platform.OS, e.Platform.Architecture)
-	return string(hash.Sum([]byte(s)))
+	hash.Write([]byte(e.Reference()))
+	return hex.EncodeToString(hash.Sum(nil))[:63]
 }
 
 func labelsForScanJob(e types.RegistryEvent) map[string]string {
 	return map[string]string{
-		"digest":     string(e.Digest),
-		"tag":        e.Tag,
-		"registry":   e.Registry,
+		// colon is not allowed in labels, digest uses algo:hash as format
+		"digest": strings.ReplaceAll(string(e.Digest), ":", "_")[:63],
+		"tag":    e.Tag,
+		// colon is not allowed in labels, registry string could contain port
+		"registry":   strings.ReplaceAll(e.Registry, ":", "_"),
 		"repository": e.Repository,
-		"platform":   fmt.Sprintf("%s/%s", e.Platform.OS, e.Platform.Architecture),
 	}
 }

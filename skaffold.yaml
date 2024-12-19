@@ -1,0 +1,12 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: registry-snyk-scan
+build:
+  artifacts:
+    - image: reg3.infra.ske.eu01.stackit.cloud/stackitcloud/registry-vuln-scan
+      ko: {}
+manifests:
+  rawYaml:
+    - deploy/registry.yaml
+    - deploy/webhook.yaml

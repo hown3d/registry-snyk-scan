@@ -1,0 +1,63 @@
+# https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry-vuln-scan
+spec:
+  selector:
+    matchLabels:
+      app: registry-vuln-scan
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: registry-vuln-scan
+    spec:
+      serviceAccountName: registry-vuln-scan
+      containers:
+      - name: registry-vuln-scan
+        image: reg3.infra.ske.eu01.stackit.cloud/stackitcloud/registry-vuln-scan
+        args: 
+          - -zap-log-level=debug
+        ports:
+        - containerPort: 8081
+          name: http
+---
+# https://kubernetes.io/docs/concepts/services-networking/service/
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry-vuln-scan
+spec:
+  selector:
+    app: registry-vuln-scan
+  ports:
+  - name: http
+    port: 8081
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: registry-vuln-scan
+rules:
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["create", "watch", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: registry-vuln-scan
+subjects:
+- kind: ServiceAccount
+  name: registry-vuln-scan
+roleRef:
+  kind: Role 
+  name: registry-vuln-scan
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: registry-vuln-scan
+

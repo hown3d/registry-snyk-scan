@@ -1,0 +1,73 @@
+# https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+spec:
+  selector:
+    matchLabels:
+      app: registry
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      containers:
+      - name: registry
+        image: registry:2
+        args:
+          - serve
+          - /config/registry.yaml
+        ports:
+        - containerPort: 5000
+          name: registry
+        volumeMounts:
+          - mountPath: /config
+            name: config
+      volumes:
+        - name: config
+          configMap:
+            name: registry-notifications
+---
+# https://kubernetes.io/docs/concepts/services-networking/service/
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+spec:
+  selector:
+    app: registry
+  ports:
+  - name: registry
+    port: 5010
+    targetPort: 5010
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-notifications
+data:
+  registry.yaml: |
+    version: 0.1
+    storage:
+      inmemory: {}
+    http:
+      addr: 0.0.0.0:5000
+      tls: {}
+    notifications:
+      endpoints:
+        - name: vuln-scan
+          url: http://registry-vuln-scan:8081/event
+          timeout: 500ms
+          threshold: 5
+          backoff: 1s
+          ignore:
+            mediatypes:
+              - application/octet-stream
+            actions:
+              - pull
+              - mount
+              - delete
+---
+
