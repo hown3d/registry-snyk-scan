@@ -6,6 +6,9 @@ build:
   artifacts:
     - image: reg3.infra.ske.eu01.stackit.cloud/stackitcloud/registry-vuln-scan
       ko: {}
+      hooks:
+        after:
+        - command: ["kubectl", "rollout", "restart", "deployment", "registry"]
 manifests:
   rawYaml:
     - deploy/registry.yaml
