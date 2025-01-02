@@ -43,19 +43,27 @@ func RegistryEventFromNotificationsEvent(e *notifications.Event) RegistryEvent {
 	}
 }
 
-func (e RegistryEvent) Platform() (v1.Platform, error) {
+func (e RegistryEvent) Platform(insecureRegistry bool) (v1.Platform, error) {
 	ref, err := name.ParseReference(e.Reference())
 	if err != nil {
 		return v1.Platform{}, err
 	}
 
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{
-			InsecureSkipVerify: true,
-		},
+	options := []remote.Option{
+		remote.WithAuthFromKeychain(authn.DefaultKeychain),
 	}
 
-	img, err := remote.Image(ref, remote.WithAuthFromKeychain(authn.DefaultKeychain), remote.WithTransport(tr))
+	if insecureRegistry {
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		}
+		options = append(options, remote.WithTransport(tr))
+	}
+
+	img, err := remote.Image(ref, options...)
+
 	if err != nil {
 		return v1.Platform{}, err
 	}

@@ -22,8 +22,9 @@ import (
 )
 
 var (
-	port      = flag.Int("port", 8081, "port to bind server to")
-	namespace = flag.String("namespace", "default", "namespace to deploy scan jobs into")
+	port             = flag.Int("port", 8081, "port to bind server to")
+	namespace        = flag.String("namespace", "default", "namespace to deploy scan jobs into")
+	insecureRegistry = flag.Bool("insecure-registry", false, "disables TLS verification for registry endpoint")
 )
 
 func main() {
@@ -49,7 +50,8 @@ func main() {
 	}
 
 	if err := (&controller.Reconciler{
-		Namespace: *namespace,
+		Namespace:        *namespace,
+		InsecureRegistry: *insecureRegistry,
 	}).AddToManager(mgr, eventChan); err != nil {
 		logger.Error(err, "adding reconciler to manager")
 		os.Exit(1)

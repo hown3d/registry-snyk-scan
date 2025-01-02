@@ -24,7 +24,8 @@ const (
 )
 
 type Reconciler struct {
-	Namespace string
+	Namespace        string
+	InsecureRegistry bool
 
 	client client.Client
 }
@@ -45,7 +46,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 		return reconcile.Result{}, nil
 	}
 
-	platform, err := req.Platform()
+	platform, err := req.Platform(r.InsecureRegistry)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to get platform for registry event: %w", err)
 	}
@@ -66,7 +67,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 							Name:    "scan",
 							Image:   "snyk/snyk:linux",
 							Command: []string{"snyk"},
-							Args:    scanJobArguments(req, platform),
+							Args:    scanJobArguments(req, platform, r.InsecureRegistry),
 							Env: []v1.EnvVar{
 								{
 									Name: "SNYK_TOKEN",
@@ -109,13 +110,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 	return reconcile.Result{}, nil
 }
 
-func scanJobArguments(e types.RegistryEvent, p imagev1.Platform) []string {
+func scanJobArguments(e types.RegistryEvent, p imagev1.Platform, insecureRegistry bool) []string {
 	cmd := []string{
 		"container",
 		"monitor",
 		"-d",
 		"--org=$(SNYK_ORG)",
-		"--insecure", //TODO: optional or remove
+	}
+	if insecureRegistry {
+		cmd = append(cmd, "--insecure")
 	}
 	cmd = append(cmd, fmt.Sprintf("--target-reference=%s@%s", e.Tag, e.Digest))
 	cmd = append(cmd, fmt.Sprintf("--platform=%s/%s", p.OS, p.Architecture))

@@ -19,6 +19,7 @@ spec:
         image: reg3.infra.ske.eu01.stackit.cloud/stackitcloud/registry-vuln-scan
         args: 
           - -zap-log-level=debug
+          - -insecure-registry
         ports:
         - containerPort: 8081
           name: http
