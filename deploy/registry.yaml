@@ -13,6 +13,22 @@ spec:
       labels:
         app: registry
     spec:
+      initContainers:
+        - name: testing-certificates
+          image: alpine/openssl
+          command:
+          - /bin/sh
+          - -c
+          - |
+            mkdir -p /certs
+            openssl req \
+            -newkey rsa:4096 -nodes -sha256 -keyout certs/domain.key \
+            -addext "subjectAltName = DNS:registry" \
+            -x509 -days 365 -out /certs/domain.crt \
+            -subj "/C=DE/ST=State/L=City/O=Organization/OU=Unit/CN=registry"
+          volumeMounts:
+          - mountPath: /certs
+            name: certs
       containers:
       - name: registry
         image: registry:2
@@ -25,10 +41,14 @@ spec:
         volumeMounts:
           - mountPath: /config
             name: config
+          - mountPath: /certs
+            name: certs
       volumes:
         - name: config
           configMap:
             name: registry-notifications
+        - name: certs
+          emptyDir: {}
 ---
 # https://kubernetes.io/docs/concepts/services-networking/service/
 apiVersion: v1
@@ -54,7 +74,9 @@ data:
       inmemory: {}
     http:
       addr: 0.0.0.0:5000
-      tls: {}
+      tls:
+        certificate: /certs/domain.crt
+        key: /certs/domain.key
     notifications:
       endpoints:
         - name: vuln-scan

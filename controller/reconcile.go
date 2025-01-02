@@ -115,6 +115,7 @@ func scanJobArguments(e types.RegistryEvent, p imagev1.Platform) []string {
 		"monitor",
 		"-d",
 		"--org=$(SNYK_ORG)",
+		"--insecure", //TODO: optional or remove
 	}
 	cmd = append(cmd, fmt.Sprintf("--target-reference=%s@%s", e.Tag, e.Digest))
 	cmd = append(cmd, fmt.Sprintf("--platform=%s/%s", p.OS, p.Architecture))
