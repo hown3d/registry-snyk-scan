@@ -90,6 +90,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 										},
 									},
 								},
+								{
+									Name:  "SNYK_DISABLE_ANALYTICS",
+									Value: "1",
+								},
 							},
 						},
 					},
