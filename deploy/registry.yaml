@@ -40,8 +40,8 @@ spec:
     app: registry
   ports:
   - name: registry
-    port: 5010
-    targetPort: 5010
+    port: 5000
+    targetPort: 5000
 ---
 apiVersion: v1
 kind: ConfigMap
