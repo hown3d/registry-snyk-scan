@@ -47,6 +47,7 @@ func main() {
 		logger.Error(err, "creating new manager")
 		os.Exit(1)
 	}
+
 	if err := (&controller.Reconciler{
 		Namespace: *namespace,
 	}).AddToManager(mgr, eventChan); err != nil {

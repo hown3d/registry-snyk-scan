@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	imagev1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stackitcloud/registry-snyk-scan/types"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
@@ -44,6 +45,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 		return reconcile.Result{}, nil
 	}
 
+	platform, err := req.Platform()
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("failed to get platform for registry event: %w", err)
+	}
+
 	log.Info("Creating job for webhook event")
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -60,7 +66,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 							Name:    "scan",
 							Image:   "snyk/snyk:linux",
 							Command: []string{"snyk"},
-							Args:    scanJobArguments(req),
+							Args:    scanJobArguments(req, platform),
 							Env: []v1.EnvVar{
 								{
 									Name: "SNYK_TOKEN",
@@ -99,7 +105,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 	return reconcile.Result{}, nil
 }
 
-func scanJobArguments(e types.RegistryEvent) []string {
+func scanJobArguments(e types.RegistryEvent, p imagev1.Platform) []string {
 	cmd := []string{
 		"container",
 		"monitor",
@@ -107,6 +113,7 @@ func scanJobArguments(e types.RegistryEvent) []string {
 		"--org=$(SNYK_ORG)",
 	}
 	cmd = append(cmd, fmt.Sprintf("--target-reference=%s@%s", e.Tag, e.Digest))
+	cmd = append(cmd, fmt.Sprintf("--platform=%s/%s", p.OS, p.Architecture))
 	cmd = append(cmd, e.Reference())
 	return cmd
 }
