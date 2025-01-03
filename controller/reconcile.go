@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"strings"
 
 	imagev1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -17,10 +18,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-)
-
-const (
-	snykTokenSecretName = "snyk-token"
 )
 
 type Reconciler struct {
@@ -36,6 +33,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 	platform, err := req.Platform(r.InsecureRegistry)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to get platform for registry event: %w", err)
+	}
+
+	if !isPlatformSupported(platform) {
+		log.Info("skipping unsupported platform", "platform", platform)
+		return reconcile.Result{}, nil
 	}
 
 	log.Info("Creating job for webhook event")
@@ -99,6 +101,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 	}
 
 	return reconcile.Result{}, nil
+}
+
+func isPlatformSupported(platform imagev1.Platform) bool {
+	return slices.ContainsFunc(supportedPlatforms, func(p imagev1.Platform) bool {
+		return p.Architecture == platform.Architecture &&
+			p.OS == platform.OS
+	})
 }
 
 func scanJobArguments(e types.RegistryEvent, p imagev1.Platform, insecureRegistry bool) []string {

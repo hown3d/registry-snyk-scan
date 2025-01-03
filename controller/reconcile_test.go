@@ -7,6 +7,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	imagev1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stackitcloud/registry-snyk-scan/types"
 	batchv1 "k8s.io/api/batch/v1"
 
@@ -93,3 +94,10 @@ var _ = Describe("Reconcile", func() {
 		Expect(job).To(Equal(newjob))
 	})
 })
+
+var _ = DescribeTable("isPlatformSupported", func(platform imagev1.Platform, expected bool) {
+	Expect(isPlatformSupported(platform)).To((Equal(expected)))
+},
+	Entry("supported should return true", imagev1.Platform{OS: "linux", Architecture: "amd64"}, true),
+	Entry("windows platform should return false", imagev1.Platform{OS: "windows"}, false),
+)
