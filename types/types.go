@@ -3,9 +3,10 @@ package types
 import (
 	"crypto/tls"
 	"fmt"
-	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	"net/http"
 	"net/url"
+
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/docker/distribution/notifications"
 	"github.com/opencontainers/go-digest"
@@ -43,6 +44,9 @@ func RegistryEventFromNotificationsEvent(e *notifications.Event) RegistryEvent {
 	}
 }
 
+// exposed for overriding in tests
+var RemoteImage = remote.Image
+
 func (e RegistryEvent) Platform(insecureRegistry bool) (v1.Platform, error) {
 	ref, err := name.ParseReference(e.Reference())
 	if err != nil {
@@ -62,8 +66,7 @@ func (e RegistryEvent) Platform(insecureRegistry bool) (v1.Platform, error) {
 		options = append(options, remote.WithTransport(tr))
 	}
 
-	img, err := remote.Image(ref, options...)
-
+	img, err := RemoteImage(ref, options...)
 	if err != nil {
 		return v1.Platform{}, err
 	}

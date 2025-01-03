@@ -13,6 +13,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -20,7 +21,6 @@ import (
 
 const (
 	snykTokenSecretName = "snyk-token"
-	snykOrgVolume       = "snyk-token"
 )
 
 type Reconciler struct {
@@ -33,19 +33,6 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (reconcile.Result, error) {
 	log := logf.FromContext(ctx).WithValues("registry", req.Registry, "repository", req.Repository, "digest", req.Digest, "tag", req.Tag)
 
-	labels := labelsForScanJob(req)
-
-	var jobList batchv1.JobList
-	err := r.client.List(ctx, &jobList, client.InNamespace(r.Namespace), client.MatchingLabels(labels))
-	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("failed to list existing jobs for scan: %w", err)
-	}
-	// job for this registry event was previously created, omit
-	if len(jobList.Items) > 0 {
-		log.Info("Job already present, skipping")
-		return reconcile.Result{}, nil
-	}
-
 	platform, err := req.Platform(r.InsecureRegistry)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("failed to get platform for registry event: %w", err)
@@ -56,7 +43,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      scanJobName(req),
 			Namespace: r.Namespace,
-			Labels:    labels,
+			Labels:    labelsForScanJob(req),
 		},
 		Spec: batchv1.JobSpec{
 			Template: v1.PodTemplateSpec{
@@ -104,6 +91,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req types.RegistryEvent) (re
 	}
 
 	if err := r.client.Create(ctx, job); err != nil {
+		// skip already existing jobs
+		if apierrors.IsAlreadyExists(err) {
+			return reconcile.Result{}, nil
+		}
 		return reconcile.Result{}, fmt.Errorf("failed to create job: %w", err)
 	}
 
