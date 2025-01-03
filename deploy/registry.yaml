@@ -78,6 +78,8 @@ data:
         certificate: /certs/domain.crt
         key: /certs/domain.key
     notifications:
+      events:
+        includereferences: true
       endpoints:
         - name: vuln-scan
           url: http://registry-vuln-scan:8081/event
